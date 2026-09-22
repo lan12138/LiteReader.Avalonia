@@ -1,0 +1,36 @@
+# LiteReader.Avalonia —— 本仓库根目录即工程目录
+#
+# 原则：凡是「构建产生」或「每次运行都会变」的东西都不进版本库。
+# 详见 DEVELOPMENT.md §5.5（自检/验收流程）。
+
+# ── 构建产物 ──────────────────────────────────────────────
+bin/
+obj/
+dist-*/
+publish/
+*.user
+*.suo
+.vs/
+
+# ── 自检 / 验收留痕 ───────────────────────────────────────
+# selftest/ 是 --selftest 的输出目录，每次运行都会重写里面的截图与日志。
+# ★ 刻意**保留**在版本库里的：selftest/*.png（视觉基线）与
+#   selftest/sample-syntax.cs.txt（验收链要用的样本），见 DEVELOPMENT.md §5.5。
+# ★ 刻意忽略的：下面这些「每次都变」且会记下本机绝对路径/用户名的文件。
+#   ⚠️ 注意 `selftest/verify.log` 与 `selftest/chrome/` **已经入库、且用户决定保留不动** ——
+#      忽略规则对「已被跟踪」的路径不生效，这两条现在只挡住将来新增的同类文件。
+#      （行尾归一化见 .gitattributes。）
+selftest/verify.log
+selftest/chrome/
+selftest/*.stdout.log
+selftest/*.stderr.log
+selftest/aot*.log
+
+# ── 工具 / 系统噪音 ──────────────────────────────────────
+.workbuddy/
+*.swp
+*~
+*.bak
+*.bak-*
+Thumbs.db
+desktop.ini
