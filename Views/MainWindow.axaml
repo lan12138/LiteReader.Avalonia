@@ -1,0 +1,234 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LiteReader.ViewModels"
+        xmlns:views="using:LiteReader.Views"
+        x:Class="LiteReader.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="LiteReader"
+        Width="1280" Height="820"
+        MinWidth="760" MinHeight="480"
+        Icon="/Assets/icon.png"
+        Background="{DynamicResource EditorBackground}">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenFilesCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenFolderCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseTabCommand}" />
+    <KeyBinding Gesture="Ctrl+F" Command="{Binding ToggleFindCommand}" />
+    <KeyBinding Gesture="F3" Command="{Binding FindNextCommand}" />
+    <KeyBinding Gesture="Shift+F3" Command="{Binding FindPrevCommand}" />
+    <KeyBinding Gesture="Ctrl+Alt+T" Command="{Binding OpenTerminalCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+
+    <!-- ============ 菜单栏 ============ -->
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="文件(_F)">
+        <MenuItem Header="打开文件..." Command="{Binding OpenFilesCommand}" InputGesture="Ctrl+O" />
+        <MenuItem Header="打开文件夹..." Command="{Binding OpenFolderCommand}" InputGesture="Ctrl+Shift+O" />
+        <Separator />
+        <MenuItem Header="保存" Command="{Binding SaveCommand}" InputGesture="Ctrl+S" />
+        <MenuItem Header="关闭当前标签" Command="{Binding CloseTabCommand}" InputGesture="Ctrl+W" />
+        <Separator />
+        <MenuItem Header="退出" Click="OnExitClick" />
+      </MenuItem>
+
+      <!--
+        编辑菜单：这些动作都作用在「当前有键盘焦点的编辑区」上，属于视图层语义，
+        所以直接路由到 EditorSurface.Focused，而不是塞进 VM。
+        （快捷键本身由 EditorSurface 的 OnKeyDown 处理，这里主要是给鼠标用户入口。）
+      -->
+      <MenuItem Header="编辑(_E)">
+        <MenuItem Header="撤销" InputGesture="Ctrl+Z" Click="OnUndoClick" />
+        <MenuItem Header="重做" InputGesture="Ctrl+Y" Click="OnRedoClick" />
+        <Separator />
+        <MenuItem Header="剪切" InputGesture="Ctrl+X" Click="OnCutClick" />
+        <MenuItem Header="复制" InputGesture="Ctrl+C" Click="OnCopyClick" />
+        <MenuItem Header="粘贴" InputGesture="Ctrl+V" Click="OnPasteClick" />
+        <Separator />
+        <MenuItem Header="全选" InputGesture="Ctrl+A" Click="OnSelectAllClick" />
+        <Separator />
+        <MenuItem Header="查找..." InputGesture="Ctrl+F" Command="{Binding ToggleFindCommand}" />
+        <MenuItem Header="查找下一个" InputGesture="F3" Command="{Binding FindNextCommand}" />
+        <MenuItem Header="查找上一个" InputGesture="Shift+F3" Command="{Binding FindPrevCommand}" />
+      </MenuItem>
+
+      <!--
+        导航：跳转到定义是「单文件内的启发式跳转」（不跨文件、不做语义解析，
+        见 Models/DefinitionFinder.cs）。它作用在当前有焦点的编辑区上，
+        所以和编辑菜单一样走视图层路由。
+      -->
+      <MenuItem Header="导航(_N)">
+        <MenuItem Header="跳转到定义" InputGesture="F12" Click="OnGoToDefinitionClick" />
+        <MenuItem Header="Ctrl+单击 也可跳转" IsEnabled="False" />
+      </MenuItem>
+
+      <MenuItem Header="视图(_V)">
+        <!-- 5 套主题是固定集合，直接列出来比走数据模板更直观、也不容易在编译期绑定上出错 -->
+        <MenuItem Header="主题">
+          <MenuItem Header="One Dark Pro"  Command="{Binding ApplyThemeCommand}" CommandParameter="One Dark Pro" />
+          <MenuItem Header="One Light"     Command="{Binding ApplyThemeCommand}" CommandParameter="One Light" />
+          <MenuItem Header="VS Code Dark"  Command="{Binding ApplyThemeCommand}" CommandParameter="VS Code Dark" />
+          <MenuItem Header="IntelliJ IDEA" Command="{Binding ApplyThemeCommand}" CommandParameter="IntelliJ IDEA" />
+          <MenuItem Header="极致黑 AMOLED"  Command="{Binding ApplyThemeCommand}" CommandParameter="极致黑 AMOLED" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="代码补全（候选 + 括号自动配对）"
+                  ToggleType="CheckBox"
+                  IsChecked="{Binding AutoComplete, Mode=TwoWay}" />
+        <Separator />
+        <MenuItem Header="放大字号" Command="{Binding ZoomInCommand}" />
+        <MenuItem Header="缩小字号" Command="{Binding ZoomOutCommand}" />
+        <MenuItem Header="恢复默认字号" Command="{Binding ZoomResetCommand}" />
+        <MenuItem Header="Ctrl + 鼠标滚轮 也可调节字号" IsEnabled="False" />
+      </MenuItem>
+
+      <!--
+        工具：三项的平台差异都封装在 Services/ 下，这里只是入口。
+        「注册为打开方式」后面带省略号，因为它会写系统状态（HKCU 注册表 / .desktop / 一份说明）。
+      -->
+      <MenuItem Header="工具(_T)">
+        <MenuItem Header="在文件所在目录打开终端"
+                  InputGesture="Ctrl+Alt+T"
+                  Command="{Binding OpenTerminalCommand}" />
+        <Separator />
+        <MenuItem Header="注册为「打开方式」..." Command="{Binding RegisterFileAssociationCommand}" />
+        <MenuItem Header="（只加进「打开方式」列表，不改默认关联）" IsEnabled="False" />
+      </MenuItem>
+
+      <MenuItem Header="帮助(_H)">
+        <MenuItem Header="关于 LiteReader" Click="OnAboutClick" />
+      </MenuItem>
+    </Menu>
+
+    <!--
+      状态栏 / 左侧栏 / 分隔条 / 标签页宿主都起了 x:Name：
+      它们只为自检服务 —— 这四处是外壳配色（走 DynamicResource）的落点，
+      而「外壳有没有跟着主题走」是资源系统里最容易静默失效的一环（见 App.axaml 的注释）。
+      没有名字的话自检只能靠视觉树下标去猜，控件顺序一变断言就废。
+    -->
+
+    <!-- ============ 状态栏 ============ -->
+    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource EditorGutterBackground}"
+            Background="{DynamicResource EditorGutterBackground}">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="8,3">
+        <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Margin="12,0" Opacity="0.8"
+                   Text="{Binding EditorFontSize, StringFormat='字号 {0:0}'}" />
+        <TextBlock Grid.Column="2" Margin="12,0" Opacity="0.8"
+                   Text="{Binding SelectedTab.CaretPosition, StringFormat='行 {0}'}" />
+        <TextBlock Grid.Column="3" Text="{Binding SelectedTab.Summary}" Opacity="0.8" />
+      </Grid>
+    </Border>
+
+    <!-- ============ 主体：文件夹树 + 编辑区 ============ -->
+    <Grid ColumnDefinitions="280,4,*">
+
+      <Panel Grid.Column="0" x:Name="TreeHost">
+        <TreeView x:Name="FolderTree"
+                  ItemsSource="{Binding RootNodes}"
+                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                  IsVisible="{Binding HasFolder}"
+                  DoubleTapped="OnTreeDoubleTapped"
+                  KeyDown="OnTreeKeyDown">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:FileNodeViewModel">
+              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+
+        <!-- 未打开文件夹时给一句指引，避免左侧留一大块空灰 -->
+        <TextBlock Text="尚未打开文件夹&#x0a;文件 → 打开文件夹（Ctrl+Shift+O）"
+                   IsVisible="{Binding !HasFolder}"
+                   Margin="14,16"
+                   TextWrapping="Wrap"
+                   Opacity="0.55" />
+      </Panel>
+
+      <GridSplitter x:Name="ColumnSplitter" Grid.Column="1" ResizeDirection="Columns"
+                    Background="{DynamicResource EditorGutterBackground}" />
+
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+
+        <!--
+          查找条：放在编辑区上方（同 LiteReader.cpp 的顶部查找条），而不是浮层 ——
+          浮层会挡住正文第一行，而查找时通常正要看那一行。
+          输入框用真控件（TextBox）而不是自绘：中文输入法、选区、剪贴板这些
+          真控件天然就有，自绘一份不值得。
+        -->
+        <Border Grid.Row="0"
+                IsVisible="{Binding FindVisible}"
+                Background="{DynamicResource EditorGutterBackground}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource EditorSelection}"
+                Padding="8,5">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+
+            <TextBlock Grid.Column="0" Text="查找" VerticalAlignment="Center"
+                       Margin="0,0,8,0" Opacity="0.75" />
+
+            <TextBox Grid.Column="1" x:Name="FindBox"
+                     Text="{Binding FindQuery, Mode=TwoWay}"
+                     Watermark="输入要查找的文本，回车找下一个"
+                     KeyDown="OnFindBoxKeyDown" />
+
+            <ToggleButton Grid.Column="2" x:Name="FindCaseToggle"
+                          Content="Aa" Margin="8,0,0,0" Padding="8,2"
+                          ToolTip.Tip="区分大小写"
+                          IsChecked="{Binding FindMatchCase, Mode=TwoWay}" />
+
+            <Button Grid.Column="3" Content="↑" Margin="6,0,0,0" Padding="8,2"
+                    ToolTip.Tip="上一个（Shift+Enter）"
+                    Command="{Binding FindPrevCommand}" />
+            <Button Grid.Column="4" Content="↓" Margin="4,0,0,0" Padding="8,2"
+                    ToolTip.Tip="下一个（Enter / F3）"
+                    Command="{Binding FindNextCommand}" />
+
+            <TextBlock Grid.Column="5" Text="{Binding FindStatus}"
+                       VerticalAlignment="Center" Margin="10,0,0,0"
+                       MinWidth="110" Opacity="0.75" />
+
+            <Button Grid.Column="6" Content="✕" Margin="4,0,0,0" Padding="8,2"
+                    ToolTip.Tip="关闭（Esc）"
+                    Command="{Binding CloseFindCommand}" />
+          </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" x:Name="TabsHost"
+                    ItemsSource="{Binding Tabs}"
+                    SelectedItem="{Binding SelectedTab, Mode=TwoWay}">
+          <TabControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DocumentTabViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                <Button Content="✕" Padding="4,0" FontSize="10"
+                        VerticalAlignment="Center"
+                        Command="{Binding CloseCommand}" />
+              </StackPanel>
+            </DataTemplate>
+          </TabControl.ItemTemplate>
+
+          <TabControl.ContentTemplate>
+            <DataTemplate x:DataType="vm:DocumentTabViewModel">
+              <!--
+                CaretOffset / AnchorOffset / FirstVisibleLine / HorizontalOffset 全部双向绑定：
+                切标签时 TabControl 会重建内容控件，状态必须存在 VM 上才能恢复。
+              -->
+              <views:EditorSurface Document="{Binding Document}"
+                                   CaretOffset="{Binding CaretOffset, Mode=TwoWay}"
+                                   AnchorOffset="{Binding AnchorOffset, Mode=TwoWay}"
+                                   FirstVisibleLine="{Binding FirstVisibleLine, Mode=TwoWay}"
+                                   HorizontalOffset="{Binding HorizontalOffset, Mode=TwoWay}" />
+            </DataTemplate>
+          </TabControl.ContentTemplate>
+        </TabControl>
+
+      </Grid>
+
+    </Grid>
+  </DockPanel>
+</Window>

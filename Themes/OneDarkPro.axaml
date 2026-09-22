@@ -1,0 +1,66 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="LiteReader.Themes.OneDarkPro">
+
+  <!-- One Dark Pro（暗） · 编辑器配色
+       作者：hujie  创建：2026-09-18  修改：2026-09-18
+       键名需与 App.axaml 的默认值、EditorSurface 的查询键保持一致。
+       新增主题：复制本文件改色 → 在 ThemeService.Catalog 里登记一行工厂委托。
+
+       修订说明（2026-09-18）：加 x:Class 变成普通 C# 类（new 出来用），
+       不再走 AvaloniaXamlLoader.Load(Uri) 的反射式加载 —— 后者带 RequiresUnreferencedCode，
+       在 PublishTrimmed 下会报 IL2026，且理论上存在字典被裁掉的风险。 -->
+
+
+  <SolidColorBrush x:Key="EditorBackground" Color="#282C34" />   <!-- 编辑器背景 -->
+  <SolidColorBrush x:Key="EditorForeground" Color="#ABB2BF" />   <!-- 编辑器正文 -->
+  <SolidColorBrush x:Key="EditorGutterBackground" Color="#21252B" />   <!-- 行号槽背景 -->
+  <SolidColorBrush x:Key="EditorGutterForeground" Color="#5C6370" />   <!-- 行号文字 -->
+  <SolidColorBrush x:Key="EditorCurrentLine" Color="#2C313A" />   <!-- 当前行高亮 -->
+  <SolidColorBrush x:Key="EditorSelection" Color="#3E4451" />   <!-- 选中区 -->
+  <SolidColorBrush x:Key="TokDefault" Color="#ABB2BF" />   <!-- 默认 token -->
+  <SolidColorBrush x:Key="TokKeyword" Color="#C678DD" />   <!-- 关键字 -->
+  <SolidColorBrush x:Key="TokType" Color="#E5C07B" />   <!-- 类型/类名 -->
+  <SolidColorBrush x:Key="TokString" Color="#98C379" />   <!-- 字符串 -->
+  <SolidColorBrush x:Key="TokNumber" Color="#D19A66" />   <!-- 数字 -->
+  <SolidColorBrush x:Key="TokComment" Color="#5C6370" />   <!-- 注释 -->
+  <SolidColorBrush x:Key="TokPreproc" Color="#56B6C2" />   <!-- 预处理指令 -->
+  <SolidColorBrush x:Key="TokBracket" Color="#ABB2BF" />   <!-- 括号（补全以外的兜底，实际走 Rb0..Rb5） -->
+
+  <!-- 彩虹括号：按嵌套深度取色，深度由跨行状态维护。
+       六个键必须都存在，缺一个就会退回 TokBracket —— SelfTest 会断言它们不是兜底色。
+       取自 LiteReader.cpp 各主题的 COLORREF rb[6]。 -->
+  <SolidColorBrush x:Key="Rb0" Color="#E06C75" />
+  <SolidColorBrush x:Key="Rb1" Color="#E5C07B" />
+  <SolidColorBrush x:Key="Rb2" Color="#98C379" />
+  <SolidColorBrush x:Key="Rb3" Color="#56B6C2" />
+  <SolidColorBrush x:Key="Rb4" Color="#61AFEF" />
+  <SolidColorBrush x:Key="Rb5" Color="#C678DD" />
+
+  <SolidColorBrush x:Key="EditorMatchBackground" Color="#205252" />   <!-- 括号配对高亮 -->
+  <!-- 双击分词高亮。取自 LiteReader.cpp 各主题的 markBg（COLORREF 0x00BBGGRR → #RRGGBB）：
+       OneDarkPro 0x0046401A / OneLight 0x00BFE6C0 / VsCodeDark 0x0032323A /
+       IntelliJIdea 0x004A4946 / Amoled 0x002A2A2A -->
+  <SolidColorBrush x:Key="EditorMarkBackground" Color="#1A4046" />
+
+  <!-- 右侧滑动导航条（自绘：一条轨道 + 一个滑块） -->
+  <SolidColorBrush x:Key="EditorOverviewBackground" Color="#21252B" />
+  <SolidColorBrush x:Key="EditorOverviewThumb" Color="#4B5263" />
+
+  <!-- 窗口外框（系统标题栏 + 四周那圈边框）跟随主题。
+       Windows 用 DWM 的三个颜色属性直接指定；非 Windows 由桌面环境 / 合成器绘制，本工程不接管
+       （为什么不做、做不到在哪，见 Services/WindowChrome.cs 的文件头）。
+       亮色主题的标题栏**必须也是亮色** —— SelfTest 用相对亮度把方向钉住，
+       否则会出现「浅色正文 + 纯黑标题栏」这种一眼就不对的组合。 -->
+  <SolidColorBrush x:Key="WindowCaptionBackground" Color="#21252B" />   <!-- 标题栏底色（取外壳那一层，不是正文层） -->
+  <SolidColorBrush x:Key="WindowCaptionForeground" Color="#ABB2BF" />   <!-- 标题文字 -->
+  <SolidColorBrush x:Key="WindowBorder" Color="#3E4451" />              <!-- 外边框 -->
+
+  <!-- 代码补全候选列表（自绘） -->
+  <SolidColorBrush x:Key="CompletionBackground" Color="#21252B" />
+  <SolidColorBrush x:Key="CompletionBorder" Color="#3E4451" />
+  <SolidColorBrush x:Key="CompletionForeground" Color="#ABB2BF" />
+  <SolidColorBrush x:Key="CompletionSelectionBackground" Color="#3E4451" />
+  <SolidColorBrush x:Key="CompletionSelectionForeground" Color="#FFFFFF" />
+
+</ResourceDictionary>

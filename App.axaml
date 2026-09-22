@@ -1,0 +1,29 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LiteReader.App"
+             RequestedThemeVariant="Dark">
+
+  <!--
+    这里**故意不再**定义一份 EditorBackground / EditorGutterBackground 之类的默认色。
+
+    修订说明（2026-09-19）：原本这里放了一整套默认值（EditorBackground=#282C34 等），
+    理由是「设计期与首帧不缺资源」。但它带来一个很难发现的后果：
+    Avalonia 的资源查找里，**父字典自己的键优先于 MergedDictionaries**，
+    而 ThemeService 正是把主题字典塞进 MergedDictionaries 的 —— 于是 APP 的默认值把主题值
+    全遮住了，`{DynamicResource EditorBackground}` 永远取到 #282C34。
+
+    表现（只出现在真实窗口里，看代码看不出来）：编辑器正文跟着主题变（它直接读 ThemeService），
+    而**外壳不跟**——窗口底色、状态栏、标签栏、左侧文件树、分隔条在「One Light」下依然是深色；
+    系统标题栏按主题上色之后，这种「外框浅、里面一块深」的割裂反而更明显。
+
+    首帧缺色这件事本来就不存在：App.OnFrameworkInitializationCompleted 里
+    先 Load 配置 → new ThemeService → RestoreFromConfig（内部会 Apply 主题）→ 才 new MainWindow，
+    窗口解析 XAML 时主题字典已经就位。所以删掉这份默认值是净收益。
+    SelfTest 里有一条断言专门钉它（窗口背景必须等于当前主题的 EditorBackground）。
+  -->
+
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+
+</Application>

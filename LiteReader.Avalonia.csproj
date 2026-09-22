@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    LiteReader · Avalonia 跨平台版
+    作者：hujie  创建：2026-09-18
+
+    技术选型（2026-09-22 修订）：
+      · 纯 Avalonia 11.3 + XAML + MVVM
+      · **发布形态：Windows x64 Native AOT**（用 `publish-aot.ps1` 发布）。
+        定这个形态的理由：本项目最终只服务单人、单平台（Windows），
+        而实测里 AOT 在启动 / 内存 / 体积三项全优 ——
+          启动（进程起→窗口可见）694 ms  vs 托管最佳 1541 ms（≈2.4×）
+          工作集                     118 MB vs 托管 147 MB
+          私有                       101 MB vs 110 MB
+          体积      37.4 MiB（LiteReader.exe 21.6 + 3 个原生 dll 共 15.8）
+        完整数据、测量口径与脚本见根目录《性能评估-2026-09-22.md》。
+        注意体积与托管单文件（37.96 MiB）几乎一样 —— AOT 不是拿体积换速度。
+
+    为什么早期曾否决 AOT（保留记录，避免以后再反复摇摆）：
+      当时有两条**产品目标**与 AOT 互斥，现在这两条都已被主动放弃：
+      1) 「单文件分发」—— .NET SDK 在 PublishAot=true 时显式跳过单文件打包
+         （Microsoft.NET.Publish.targets: GenerateSingleFileBundle 的 Condition
+          为 '$(PublishSingleFile)' == 'true' and '$(PublishAot)' != 'true'），
+         ILC 的 targets 里也没有任何内联原生库的机制 → IncludeNativeLibrariesForSelfExtract
+         在 AOT 下是空开关。AOT 产物必然是「exe + 3 个原生 dll」。
+      2) 「一台机器交叉发布三平台」—— AOT 不能跨 OS 编译，直接报
+           error : Cross-OS native compilation is not supported.
+         → 想给三平台出 AOT 产物，必须有三个平台的构建机/CI。
+      结论：AOT 的收益是实打实的（三项全优），只要接受「4 个文件 + 只发 Windows」，
+      它就是最优解；不是「收益小所以不做」。
+
+    ⚠️ 发布前必读（否则一定失败）：
+      AOT 的链接器需要 MSVC 与 Windows SDK 的库目录，而 ILC 默认靠自带的
+      findvcvarsall.bat 去发现它们 —— 那个脚本内部会 call vcvarsall.bat → reg.exe，
+      而**本机安全策略禁止启动 reg.exe**，这条路走不通。
+      → 必须用 publish-aot.ps1：它自己从注册表与文件系统推导工具链路径、
+        设好 PATH/LIB/INCLUDE，并加 -p:IlcUseEnvironmentalTools=true
+        让 ILC 跳过 findvcvarsall。原因与三个坑见该脚本头部注释。
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LiteReader</AssemblyName>
+    <RootNamespace>LiteReader</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- 裁剪（两个属性必须一起写，原因见下）。
+         ★ 不要写 <PublishTrimmed>false</PublishTrimmed>：
+           AOT 发布时 SDK 强制 PublishTrimmed=true，写 false 会直接报错
+             error : PublishTrimmed is implied by native compilation and cannot be disabled.
+           （这行曾经就是 false，导致「按文档发布」跑出 96.7 MiB 而不是 37 MB。）
+         ★ 也不能只写 TrimMode：单独设置 TrimMode **不会**打开 PublishTrimmed
+           —— 只有 PublishAot=true 会隐式打开它。
+         TrimMode=partial：只裁本工程自己的代码，Avalonia 等第三方程序集保持原样。
+           这是三种发布形态（托管单文件 / 全剪切 / AOT）都跑过 305 项断言的组合。 -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+
+    <!-- Windows：把 .ico 嵌进 exe 的 PE 资源段 ——
+         资源管理器、任务栏、Alt+Tab 用的都是它，而不是运行时的 Window.Icon。
+         非 Windows 构建会忽略这一项，不影响交叉发布。 -->
+    <ApplicationIcon>Assets\appicon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- 图标资源。
+       同一个图标两种用途、两个格式，**必须同源**（都由根目录 icon_gen.cpp 产出：
+       icon_gen.exe → appicon.ico → ico2png.py → icon.png，见 spikes/winshot/）：
+         · appicon.ico → 嵌进 exe（ApplicationIcon，上面那行）
+         · icon.png    → ① Window.Icon（运行时窗口/任务栏图标；ICO 的解码在各平台不一致，PNG 稳）
+                         ② Linux 的 XDG 图标目录（.desktop 的 Icon= 只认名字或真实文件路径） -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
+  </ItemGroup>
+
+</Project>
