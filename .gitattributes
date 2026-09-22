@@ -1,0 +1,46 @@
+# LiteReader.Avalonia —— 行尾与二进制类型声明
+#
+# 为什么需要这个文件：归一化规则原本只由本机 `core.autocrlf=true` 决定，
+# 那是**每台机器的本地配置、不进版本库** —— 换一台 `autocrlf=false` 的机器提交，
+# 索引里就会混进 CRLF，之后每次 diff 都像「整个文件都改了」。
+# 这里把规则声明在仓库里，使所有克隆者的行为一致。
+#
+# ★ 刻意**不**写 `* text=auto eol=lf`：本机工作区里有 3 个文件是 CRLF
+#   （`Themes/OneDarkPro.axaml`、`selftest/verify.log`、`selftest/chrome/chrome-pixels.txt`，
+#   都是程序用 CRLF 写出来的）。强行 eol=lf 会让下次检出时它们全被判定为「已修改」。
+#   → 保留 `* text=auto`：索引统一为 LF，工作区按各平台惯例，零扰动。
+
+* text=auto
+
+# ── 二进制：永久禁止任何行尾 / 编码转换 ──────────────────────────
+# （git 的自动探测在多数情况够用，但显式声明可避免未来某个文件被误判为文本）
+*.png    binary
+*.ico    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.bmp    binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.zip    binary
+*.7z     binary
+*.gz     binary
+*.dll    binary
+*.exe    binary
+*.pdb    binary
+*.nupkg  binary
+*.snk    binary
+
+# ── 测试夹具：字节内容必须处处一致 ──────────────────────────────
+# `--selftest` 的断言与基线截图都建立在它的**行结构**上，
+# 所以这个文件在任何平台检出的行尾都必须是 LF。
+selftest/sample-syntax.cs.txt  text eol=lf
+
+# ── 自检留痕：由程序/PowerShell 生成，可能带 CRLF ────────────────
+# 统一为 LF，避免「只是重跑一次自检」就产生整文件 diff。
+selftest/verify.log   text eol=lf
+selftest/chrome/*.txt text eol=lf
+*.log                 text eol=lf
