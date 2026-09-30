@@ -35,7 +35,12 @@ public sealed class AppConfig
     public double WindowY { get; set; } = double.NaN;
     public bool WindowMaximized { get; set; }
 
-    /// <summary>上次打开的文件夹（下次启动自动恢复文件树）。</summary>
+    /// <summary>
+    /// 上次打开的文件夹。
+    /// ★ 2026-09-22 起**只作外部终端的「回退目录」用，启动时不再恢复文件树**
+    /// （用户要求每次启动都是一张干净的文件树）→ 程序里已没有任何地方写它，
+    /// 只有 TerminalLauncher.ResolveDirectory 还在读。留着是为了兼容旧配置文件里已有的值。
+    /// </summary>
     public string? LastFolder { get; set; }
 }
 

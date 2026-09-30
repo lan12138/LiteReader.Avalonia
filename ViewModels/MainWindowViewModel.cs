@@ -132,7 +132,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     // ---------------- 启动恢复 ----------------
 
-    /// <summary>启动时按配置恢复主题、字号、补全开关与上次的文件夹。</summary>
+    /// <summary>启动时按配置恢复主题、字号与补全开关。★ 不再恢复上次的文件夹（见 OpenFolderAsync）。</summary>
     public void RestoreFromConfig(AppConfig cfg)
     {
         EditorSettings.LoadFrom(cfg);
@@ -140,9 +140,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         AutoComplete = EditorSettings.AutoComplete;
         FindMatchCase = cfg.FindMatchCase;
         _themes.Apply(cfg.Theme);
-
-        if (!string.IsNullOrEmpty(cfg.LastFolder) && Directory.Exists(cfg.LastFolder))
-            SetFolder(cfg.LastFolder);
     }
 
     // ---------------- 命令 ----------------
@@ -163,10 +160,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         string? dir = await PickFolderAsync();
         if (string.IsNullOrEmpty(dir)) return;
         SetFolder(dir);
-        AppConfigStore.Persist(c => c.LastFolder = dir);
+        // ★ 2026-09-22：不再把文件夹写进配置 —— 用户要求每次启动都是一张干净的文件树。
+        // AppConfig.LastFolder 属性保留（外部终端的「回退目录」还在读它）。
     }
 
-    /// <summary>载入文件夹到左侧文件树（打开文件夹、启动恢复都走这里）。</summary>
+    /// <summary>载入文件夹到左侧文件树。整棵树一次性建好（见 FileNodeViewModel）。</summary>
     public void SetFolder(string dir)
     {
         RootNodes.Clear();
@@ -200,6 +198,53 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Tabs.Remove(tab);
         SelectedTab = Tabs.Count > 0 ? Tabs[Math.Clamp(idx, 0, Tabs.Count - 1)] : null;
         StatusText = "已关闭标签";
+    }
+
+    // ---- 标签栏右键菜单：定向关闭 ----
+    //
+    // 三个命令都以「右键点中的标签」为基准（参数可能为 null —— 菜单挂在标签项上，
+    // 正常不会，但命令也可能被快捷键/自检直接调用，所以都退回 SelectedTab）。
+    // 关闭后统一把选中项落到「最后一个活着的标签」，这与 VS Code 的行为一致：
+    // 批量关标签时人的注意力本就在剩下的那一撮上，不必猜某个被删掉的下标。
+
+    /// <summary>关闭该标签右侧的全部标签（不含自己）。</summary>
+    [RelayCommand]
+    private void CloseTabsToRight(DocumentTabViewModel? tab)
+    {
+        tab ??= SelectedTab;
+        if (tab is null) return;
+        int idx = Tabs.IndexOf(tab);
+        if (idx < 0) return;
+        int removed = 0;
+        for (int i = Tabs.Count - 1; i > idx; i--) { Tabs.RemoveAt(i); removed++; }
+        if (removed == 0) { StatusText = "右侧没有可关闭的标签"; return; }
+        SelectedTab = tab;
+        StatusText = $"已关闭右侧 {removed} 个标签";
+    }
+
+    /// <summary>关闭该标签左侧的全部标签（不含自己）。</summary>
+    [RelayCommand]
+    private void CloseTabsToLeft(DocumentTabViewModel? tab)
+    {
+        tab ??= SelectedTab;
+        if (tab is null) return;
+        int idx = Tabs.IndexOf(tab);
+        if (idx < 0) return;
+        if (idx == 0) { StatusText = "左侧没有可关闭的标签"; return; }
+        for (int i = idx - 1; i >= 0; i--) Tabs.RemoveAt(i);
+        SelectedTab = tab;
+        StatusText = $"已关闭左侧 {idx} 个标签";
+    }
+
+    /// <summary>关闭全部标签。</summary>
+    [RelayCommand]
+    private void CloseAllTabs()
+    {
+        if (Tabs.Count == 0) { StatusText = "没有打开的标签"; return; }
+        int n = Tabs.Count;
+        Tabs.Clear();
+        SelectedTab = null;
+        StatusText = $"已关闭全部 {n} 个标签";
     }
 
     [RelayCommand]

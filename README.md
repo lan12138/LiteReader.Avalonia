@@ -1,7 +1,7 @@
 # LiteReader
 
 > 作者：lanjue12138　创建：2026-09-18　最近更新：2026-09-22
-> 工程：`src/LiteReader.Avalonia/`（产物名为 `LiteReader`）　开发文档：[DEVELOPMENT.md](DEVELOPMENT.md)
+> 本仓库根目录即工程目录（产物名为 `LiteReader`）
 
 **LiteReader** 是一个 VS Code 风格的**轻量级本地代码阅读 / 编辑工具** —— 打开即看、随开随关，
 不卡顿、不占资源，代码着色美观，支持多套深色 / 亮色主题、代码补全与跳转定义。
@@ -34,7 +34,6 @@
 | [8. 构建与运行](#8-构建与运行) | 构建、运行、发布、诊断参数 |
 | [9. 已知限制](#9-已知限制) | 平台能力矩阵、缩水处与其它限制（如实记录） |
 | [10. 现状与路线图](#10-现状与路线图) | 已完成 / 待做 |
-| [11. 相关文档](#11-相关文档) | 开发文档与实测记录 |
 
 ---
 
@@ -121,7 +120,7 @@
 ### 跳转定义
 
 `F12` / `Ctrl+单击` / 右键菜单 —— 单文件启发式打分定位函数或变量的定义处
-（后跟 `(`、前接声明关键字、前接首字母大写词等加权），区分度可靠（详见 [DEVELOPMENT.md](DEVELOPMENT.md) §7.2）。
+（后跟 `(`、前接声明关键字、前接首字母大写词等加权），区分度可靠。
 
 ### 代码补全（可在菜单里开关）
 
@@ -297,7 +296,7 @@ Avalonia 的 `UsePlatformDetect()` 自动选后端，**业务代码里不需要�
 ## 7. 工程结构
 
 ```
-src/LiteReader.Avalonia/
+LiteReader.Avalonia/            ← 本仓库根目录
 ├── LiteReader.Avalonia.csproj    net10.0 / WinExe / PublishTrimmed+TrimMode=partial / ApplicationIcon
 ├── publish-aot.ps1               Native AOT 发布脚本（唯一被验证过的发布方式）
 ├── Program.cs                    入口 · AppBuilder · 无窗口诊断提前返回 · 单实例门禁
@@ -336,7 +335,7 @@ src/LiteReader.Avalonia/
 
 - **编辑区自绘、外壳用控件** —— 框架自带的文本控件撑不住大文件（`RichTextBox` 载入 19.3 MB
   要 2886 ms 且呈超线性），编辑器需要的分段着色、行号槽、当前行高亮、脏矩形增量重绘、
-  自绘导航条与补全面板它也不提供。实测依据见 [DEVELOPMENT.md](DEVELOPMENT.md) §6。
+  自绘导航条与补全面板它也不提供。
 - **主题与字号走静态单例 + 事件广播**（`ThemeService.Changed` / `EditorSettings.Changed`）：
   自绘控件挂载时订阅、卸载时退订。好处是 XAML 里不用写长绑定，模板层保持干净。
 - **文件对话框能力由 View 注入给 ViewModel**：VM 因此不依赖 `TopLevel` / `StorageProvider`，可单测。
@@ -351,16 +350,18 @@ src/LiteReader.Avalonia/
 **环境要求**：.NET SDK 10（本工程在 10.0.401 上验证）+
 **带 C++ 工具链的 Visual Studio**（Native AOT 需要 `link.exe` 与 Windows SDK 的库目录）。
 
+以下命令都在**仓库根目录**执行：
+
 ```powershell
 # 开发构建
-dotnet build src/LiteReader.Avalonia/LiteReader.Avalonia.csproj -c Release
+dotnet build LiteReader.Avalonia.csproj -c Release
 
 # 直接运行（可带文件路径）
-dotnet run --project src/LiteReader.Avalonia -- <可选的文件路径>
+dotnet run -- <可选的文件路径>
 
 # 发布（推荐，也是唯一被验证过的发布方式）
-powershell -ExecutionPolicy Bypass -File src/LiteReader.Avalonia/publish-aot.ps1
-#   -> src/LiteReader.Avalonia/dist-win-x64/
+powershell -ExecutionPolicy Bypass -File publish-aot.ps1
+#   -> dist-win-x64/
 #        LiteReader.exe  libSkiaSharp.dll  libHarfBuzzSharp.dll  av_libglesv2.dll   (37.4 MiB)
 ```
 
@@ -412,7 +413,7 @@ LiteReader.exe path/to/file.cs     # 直接打开文件
 | `--selftest` | 视觉回归 + 逻辑断言 + 真实控件上的闭环 | **是** |
 
 诊断参数会**绕开单实例门禁**（否则「程序已开着时再跑诊断」会被转发出去、然后自己退出），
-也不会覆盖你保存的配置。细节见 [DEVELOPMENT.md](DEVELOPMENT.md) §5。
+也不会覆盖你保存的配置。
 
 ---
 
@@ -473,15 +474,6 @@ LiteReader.exe path/to/file.cs     # 直接打开文件
 | 4 | **CI 三平台各自冒烟** | 三平台各自跑一次自检 |
 | 5 | **跨平台自绘标题栏** | `ExtendClientAreaToDecorationsHint` —— 收益只在非 Windows 上体现 |
 | 6 | **双击分词高亮的命中上限** | 加一个「超过阈值就不点亮」的闸门 |
-
----
-
-## 11. 相关文档
-
-| 文档 | 内容 |
-|---|---|
-| [DEVELOPMENT.md](DEVELOPMENT.md) | **开发文档**：自检体系（三个诊断模式 + 验收流程）、工程结构与关键设计决定、逐项实现说明、待办 |
-|                                  |                                                              |
 
 ---
 

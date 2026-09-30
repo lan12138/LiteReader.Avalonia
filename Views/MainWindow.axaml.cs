@@ -30,6 +30,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using LiteReader.Services;
 using LiteReader.ViewModels;
 
@@ -49,6 +50,41 @@ public partial class MainWindow : Window
 
         // 隧道路由：先于焦点控件收到按键，用于实现「全局快捷键」
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
+        // 标签栏右键：见 OnTabsPointerPressed
+        TabsHost.AddHandler(PointerPressedEvent, OnTabsPointerPressed, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>
+    /// 右键标签时先把被点中的标签设为选中。
+    ///
+    /// 为什么必须在 View 里做：ContextMenu 挂在 **TabItem 容器**上（见 MainWindow.axaml 的
+    /// TabItemWithMenu），而菜单项拿「操作对象」只能靠 TabControl.SelectedItem ——
+    /// 右键一个**未选中**的标签时，SelectedItem 还是原来那个，
+    /// 于是「关闭标签」会关错人、左右批量关闭的基准也会错。
+    /// Avalonia 官方的做法同样是在 PointerPressed 里先改选中项（见 AvaloniaUI#11676）。
+    ///
+    /// 走隧道路由（Tunnel）：要在 TabItem 自己处理右键之前拿到事件。
+    /// 只在右键时动选中项 —— 左键的选中由 TabControl 自己处理，抢过来会破坏拖拽/多选之类的既有行为。
+    /// </summary>
+    private void OnTabsPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(TabsHost).Properties.IsRightButtonPressed) return;
+        if (DataContext is not MainWindowViewModel vm) return;
+        if (e.Source is not Visual src) return;
+
+        // 从点击处往上找承载它的 TabItem
+        Visual? v = src;
+        while (v is not null)
+        {
+            if (v is TabItem item)
+            {
+                if (item.DataContext is DocumentTabViewModel tab && !ReferenceEquals(vm.SelectedTab, tab))
+                    vm.SelectedTab = tab;
+                return;
+            }
+            v = v.GetVisualParent();
+        }
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

@@ -131,6 +131,7 @@ public static class SelfTest
         failures += DefinitionSmoke();
         failures += CompletionSmoke();
         failures += WordMarkerSmoke();
+        failures += FileTreeSmoke();
         failures += OverviewSmoke();
         failures += WindowChromeSmoke();
         failures += IconSmoke(window);
@@ -628,6 +629,122 @@ public static class SelfTest
         failures += Check("越界偏移 → 空区间（不抛异常）",
             WordMarker.WordBoundsAt(text, -1) == (-1, -1)
             && WordMarker.WordBoundsAt(text, text.Length) == (text.Length, text.Length));
+
+        return failures;
+    }
+
+    // ---------------- 文件树（一次性建树 + 类型识别） ----------------
+
+    /// <summary>
+    /// 文件树冒烟。这一节是 2026-09-22 加的 —— 在此之前**文件树一条断言都没有**，
+    /// 而它是左栏唯一的内容来源，改动前只能靠肉眼截图看（也真被漏过：
+    /// 「懒加载」这种形态上的问题，从截图里根本看不出是懒加载还是没展开）。
+    ///
+    /// 重点钉住四条：
+    ///   ① 一次性递归建树（需求：不要双击才展开一层）—— 建完就能看到第 2 层；
+    ///   ② 分层深度上限真的截断（否则打开 C:\Windows 会把整棵树拉出来，UI 直接卡死）；
+    ///   ③ 文件夹与文件**类型不同、显示样式不同**（图标字形不一致是硬断言，不是「看着不一样」）；
+    ///   ④ 根节点名取的是路径本身（盘符「C:\」的 Path.GetFileName 是空串，这里容易出空名字）。
+    ///
+    /// 全部走**临时目录真实落盘**，不依赖仓库里有没有样本 —— 否则「少传样本就静默少跑」。
+    /// </summary>
+    private static int FileTreeSmoke()
+    {
+        Console.WriteLine("[selftest] --- 文件树冒烟（一次性建树 / 类型识别） ---");
+        int failures = 0;
+
+        string root = Path.Combine(Path.GetTempPath(), "LiteReader-selftest-tree");
+        try
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            // 3 层：root / a / b / c，外加若干不同类型文件
+            string a = Path.Combine(root, "a");
+            string b = Path.Combine(a, "b");
+            string c = Path.Combine(b, "c");
+            Directory.CreateDirectory(c);
+            File.WriteAllText(Path.Combine(root, "x.cs"), "class X { }");
+            File.WriteAllText(Path.Combine(root, "y.png"), "not-a-real-png");
+            File.WriteAllText(Path.Combine(root, "z.zip"), "not-a-real-zip");
+            File.WriteAllText(Path.Combine(root, ".hidden.txt"), "hidden");
+            File.WriteAllText(Path.Combine(c, "deep.py"), "print(1)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[selftest]   跳过（临时目录不可写：{ex.Message}）");
+            return failures;
+        }
+
+        try
+        {
+            var rootNode = new FileNodeViewModel(root, isDirectory: true);
+
+            // ① 建树即可见第 2 层（不是「展开才加载」）
+            FileNodeViewModel? aNode = rootNode.Children.FirstOrDefault(n => n.Name == "a");
+            failures += Check("建树后第 1 层子目录已出现（不需要展开）", aNode is not null);
+            failures += Check("建树后第 2 层子目录已出现（递归建树，不是懒加载）",
+                aNode?.Children.Any(n => n.Name == "b") == true);
+            failures += Check("建树后第 3 层文件已出现（3 层目录嵌套）",
+                aNode?.Children.FirstOrDefault(n => n.Name == "b")
+                     ?.Children.FirstOrDefault(n => n.Name == "c")
+                     ?.Children.Any(n => n.Name == "deep.py") == true);
+
+            // ② 隐藏项被过滤（点前缀在 Unix/Windows 都算隐藏）
+            failures += Check("点前缀文件不进树",
+                rootNode.Children.All(n => n.Name != ".hidden.txt"));
+
+            // ③ 目录优先、且类型不同 → 图标不同
+            failures += Check("目录排在文件之前",
+                rootNode.Children.Count > 0 && rootNode.Children[0].IsDirectory);
+            failures += Check("目录的 Kind 是 Folder", rootNode.Children[0].Kind == FileNodeKind.Folder);
+
+            FileNodeViewModel? cs = rootNode.Children.FirstOrDefault(n => n.Name == "x.cs");
+            FileNodeViewModel? png = rootNode.Children.FirstOrDefault(n => n.Name == "y.png");
+            FileNodeViewModel? zip = rootNode.Children.FirstOrDefault(n => n.Name == "z.zip");
+            failures += Check("x.cs 被识别为代码", cs?.Kind == FileNodeKind.Code);
+            failures += Check("y.png 被识别为图片", png?.Kind == FileNodeKind.Image);
+            failures += Check("z.zip 被识别为压缩包", zip?.Kind == FileNodeKind.Archive);
+
+            // 图标字形：文件夹（折叠/展开两态）与三类文件必须互不相同
+            string folderClosed = FileNodeViewModel.IconOf(FileNodeKind.Folder, isExpanded: false);
+            string folderOpen = FileNodeViewModel.IconOf(FileNodeKind.Folder, isExpanded: true);
+            failures += Check("文件夹图标：折叠态与展开态不同", folderClosed != folderOpen);
+            failures += Check("文件夹图标 ≠ 代码文件图标", folderClosed != cs!.Icon);
+            failures += Check("代码 / 图片 / 压缩包三种图标互不相同",
+                cs.Icon != png!.Icon && cs.Icon != zip!.Icon && png.Icon != zip.Icon);
+            failures += Check("未知扩展名有兜底图标（不会返回空串）",
+                FileNodeViewModel.IconOf(FileNodeKind.Unknown, false).Length > 0);
+
+            // ④ 根节点名：普通目录取末段；盘符/根路径不能变成空串
+            failures += Check("根节点名取自路径末段", rootNode.Name == "a" || rootNode.Name.EndsWith("selftest-tree"));
+            var driveRoot = new FileNodeViewModel(Path.GetPathRoot(root) ?? "/", isDirectory: true);
+            failures += Check("盘符根节点名不为空（Path.GetFileName 对 \"C:\\\" 返回空串）",
+                driveRoot.Name.Length > 0);
+
+            // ⑤ 深度上限真的截断（构造一段超深目录，断言不会一路建到底）
+            string deep = root;
+            for (int i = 0; i < FileNodeViewModel.MaxDepth + 2; i++)
+            {
+                deep = Path.Combine(deep, "d" + i);
+                Directory.CreateDirectory(deep);
+            }
+            var deepRoot = new FileNodeViewModel(root, isDirectory: true);
+            int levels = 0;
+            FileNodeViewModel? cur = deepRoot;
+            while (cur is not null && cur.Children.Count > 0)
+            {
+                cur = cur.Children.FirstOrDefault(n => n.Name.StartsWith('d'));
+                if (cur is null) break;
+                levels++;
+                if (levels > FileNodeViewModel.MaxDepth + 5) break;   // 防死循环
+            }
+            failures += Check($"深度被 MaxDepth({FileNodeViewModel.MaxDepth}) 截断，不会无限递归",
+                levels <= FileNodeViewModel.MaxDepth + 1);
+        }
+        finally
+        {
+            try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+            catch { /* 清理失败不影响断言结果 */ }
+        }
 
         return failures;
     }

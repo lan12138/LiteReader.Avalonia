@@ -83,4 +83,37 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
   </ItemGroup>
 
+  <!--
+    ★ 覆盖 ILC 自带的 CopyNativeBinary（Microsoft.NETCore.Native.Publish.targets:89）
+
+    原来那两条指令是：
+        <Delete Files="$(PublishDir)\$(TargetName)$(NativeBinaryExt)" />
+        <Copy   SourceFiles="$(NativeBinary)" DestinationFolder="$(PublishDir)" />
+
+    问题出在第一条 Delete 上：`$(PublishDir)\LiteReader.exe` 此刻是 **Publish target
+    刚拷进去的托管 apphost 占位**，落地瞬间就被本机安全软件（天融信 TopDesk 的
+    tdsvc.exe，服务名 tdsvc / 显示名 TopDesk）抢去扫描并持有独占句柄 ——
+    于是 Delete 报：
+        error MSB3061: 无法删除文件 "...\dist-win-x64\LiteReader.exe"
+        Access to the path ... is denied. 文件被"TopDesk (6196)"锁定。
+
+    ★ 这条错误会**每次发布必现**（不是偶发）：只要 exe 被写出来，扫描器就来；
+      实测重跑三次、甚至先手工删空 dist 再发，都一样。
+      而且**它出现在 Publish 之后**，所以此时 dist 里 4 个文件其实已经齐了、
+      产物可用 —— 失败的是「删不掉占位 → 后续步骤全被 throw 掉」：
+
+    → 用 Copy 的 OverwriteReadOnlyFiles 直接原地覆盖，**跳过 Delete 这一步**。
+      两者目标一致（让 PublishDir 里躺着的是原生二进制），但覆盖不需要先取得
+      「删除」权限，安全软件不再有拦截点。
+
+    ⚠️ 后定义的 target 会覆盖 Import 进来的同名 target，所以这段必须留在项目文件里；
+      删掉它就会退回原来那个每发必挂的版本。
+  -->
+  <Target Name="CopyNativeBinary" AfterTargets="Publish"
+          Condition="'$(PublishAot)' == 'true'">
+    <Copy SourceFiles="$(NativeBinary)"
+          DestinationFolder="$(PublishDir)"
+          OverwriteReadOnlyFiles="true" />
+  </Target>
+
 </Project>
